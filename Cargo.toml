@@ -1,0 +1,16 @@
+[package]
+name = "flake-egui"
+version = "0.1.0"
+edition = "2024"
+description = "egui integration for the Flake engine"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/creepersaur/flake-egui"
+keywords = ["egui", "gui", "wgpu", "flake", "gamedev"]
+categories = ["gui", "ui", "graphics"]
+
+[dependencies]
+flake-engine = "0.1.5"
+egui = { version = "0.37", features = ["default_fonts"] }
+egui-wgpu = "0.37.0"
+egui-winit = "0.37.0"
+wgpu = "30.0.1"
