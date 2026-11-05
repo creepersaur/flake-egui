@@ -2,6 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use flake::prelude::*;
 pub use egui;
+use egui::Plugin;
+use egui::text_selection::LabelSelectionState;
 
 pub struct FlakeEgui {
     ctx: egui::Context,
@@ -11,6 +13,7 @@ pub struct FlakeEgui {
 }
 
 impl FlakeEgui {
+    /// Creates a wrapper for egui using flake.
     pub fn new() -> Self {
         let window = get_window();
         let ctx = egui::Context::default();
@@ -45,18 +48,30 @@ impl FlakeEgui {
         Self { ctx, state, renderer, pending }
     }
 
-    /// Call at the start of each frame
+    /// Call at the start of the frame.
     pub fn begin(&mut self) -> &egui::Context {
         let window = get_window();
         for e in get_window_events() {
             let _ = self.state.on_window_event(&window, &e);
         }
         self.ctx.begin_pass(self.state.take_egui_input(&window));
+
+        // What run_pass_dyn does before the user's code:
+        self.ctx.root_ui(|ui| {
+            self.ctx.with_plugin(|p: &mut LabelSelectionState| p.on_begin_pass(ui));
+            self.ctx.with_plugin(|p: &mut egui::DragAndDrop| p.on_begin_pass(ui));
+        });
         &self.ctx
     }
 
-    /// Call at the end of each frame
+    /// Call at the end of the frame.
     pub fn end(&mut self) {
+        // What run_pass_dyn does after the user's code:
+        self.ctx.root_ui(|ui| {
+            self.ctx.with_plugin(|p: &mut LabelSelectionState| p.on_end_pass(ui));
+            self.ctx.with_plugin(|p: &mut egui::DragAndDrop| p.on_end_pass(ui));
+        });
+
         let mut out = self.ctx.end_pass();
         self.state.handle_platform_output(&get_window(), out.platform_output);
 
@@ -86,4 +101,32 @@ impl FlakeEgui {
 
     /// If true, egui is currently listening on text input (e.g. typing text in a `TextEdit`).
     pub fn wants_keyboard(&self) -> bool { self.ctx.egui_wants_keyboard_input() }
+
+    /// Run all of your UI at once in a closure that gives the Context and the UI.
+    /// Do NOT run this multiple times.
+    pub fn run(&mut self, mut add_ui: impl FnMut(&egui::Context, &mut egui::Ui)) {
+        let window = get_window();
+        for e in get_window_events() {
+            let _ = self.state.on_window_event(&window, &e);
+        }
+
+        let raw = self.state.take_egui_input(&window);
+        let mut out = self.ctx.run_ui(raw, |ui| add_ui(&self.ctx, ui));
+
+        self.state.handle_platform_output(&window, out.platform_output);
+
+        let (device, queue) = (get_device(), get_queue());
+        let mut r = self.renderer.borrow_mut();
+        for (id, deltas) in out.textures_delta.set.drain() {
+            for delta in &deltas {
+                r.update_texture(&device, &queue, id, delta);
+            }
+        }
+        for id in &out.textures_delta.free {
+            r.free_texture(id);
+        }
+
+        let jobs = self.ctx.tessellate(out.shapes, out.pixels_per_point);
+        *self.pending.borrow_mut() = Some((jobs, out.pixels_per_point));
+    }
 }

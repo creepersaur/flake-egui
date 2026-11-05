@@ -51,6 +51,35 @@ async fn main() {
 }
 ```
 
+You can also use the `run()` method (below) to make your UI code cleaner. 
+
+## Using `run()`
+
+Use the `gui.run()` method if you want to have all your egui UI related stuff in a single closure.
+Remember **to not call `run()` multiple times.**
+
+```rust
+use flake::prelude::*;
+use flake_egui::FlakeEgui;
+
+#[flake]
+async fn main() {
+    let mut gui = FlakeEgui::new();
+
+    loop {
+        clear_background(BLACK);
+        
+        gui.run(|ctx, ui| {
+            egui::Window::new("Debug").show(ctx, |ui| {
+                ui.label("Hello World");
+            });
+        });
+        
+        end_frame!();
+    }
+}
+```
+
 ## Documentation
 
 ```rust
@@ -59,6 +88,9 @@ gui.begin() -> &Context;
 
 // Call at the end of the frame. Draws the windows and egui output.
 gui.end();
+
+// Runs a closure which runs your UI all in one place. Do NOT run this multiple times.
+gui.run(|ctx, ui|);
 
 // True if egui is currently interested in the pointer (mouse or touch).
 gui.wants_pointer() -> bool;
